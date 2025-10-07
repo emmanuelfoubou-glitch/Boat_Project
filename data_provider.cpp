@@ -27,6 +27,15 @@ void setRemoteTargetAngle(float a) {
   remote_targetAngle = a;
 }
 
+// Auth token simple storage
+String remoteAuthToken = "";
+
+// Very small token generator (not cryptographically secure)
+String generateToken() {
+  unsigned long r = micros() ^ (unsigned long)remote_vref;
+  return String(r, HEX);
+}
+
 String getDataJSON() {
   // Build a compact JSON string. Keep memory usage small by using String
   // concatenation carefully.

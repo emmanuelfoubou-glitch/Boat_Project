@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connexion - Dashboard bateau</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="login-card">
+    <h2>Connexion</h2>
+    <form id="loginForm">
+      <label>Nom d'utilisateur</label>
+      <input type="text" id="user" required>
+      <label>Mot de passe</label>
+      <input type="password" id="pass" required>
+      <button type="submit">Se connecter</button>
+    </form>
+    <div id="msg"></div>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      const user = document.getElementById('user').value;
+      const pass = document.getElementById('pass').value;
+      // On utilise GET simple sur /login pour obtenir un token
+      fetch('/login?user='+encodeURIComponent(user)+'&pass='+encodeURIComponent(pass))
+        .then(r => r.text())
+        .then(t => {
+          // la réponse JavaScript/HTML va stocker le token et rediriger
+          document.open();
+          document.write(t);
+          document.close();
+        })
+        .catch(err => { document.getElementById('msg').innerText = 'Erreur réseau'; });
+    });
+  </script>
+</body>
+</html>

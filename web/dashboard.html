@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard bateau</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tableau de bord</h1>
+      <div id="userArea"></div>
+    </header>
+
+    <main>
+      <section class="row">
+        <div class="card">
+          <h3>Consignes</h3>
+          <label>Vitesse désirée (vref)</label>
+          <input id="vrefInput" type="range" min="0" max="30" step="0.1">
+          <div class="gauge" id="speedGauge"></div>
+
+          <label>Cap désiré</label>
+          <input id="headingInput" type="range" min="0" max="360" step="1">
+          <canvas id="compassCanvas" width="200" height="200"></canvas>
+
+          <button id="applyBtn">Appliquer</button>
+        </div>
+
+        <div class="card">
+          <h3>Informations capteurs</h3>
+          <pre id="telemetry">Chargement...</pre>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    // Récupération du token depuis l'URL (écrit lors du login)
+    function getTokenFromFragment(){
+      const hash = location.hash.substring(1);
+      if(!hash) return null;
+      try{
+        const params = new URLSearchParams(hash);
+        return params.get('token');
+      }catch(e){return null}
+    }
+
+    const token = getTokenFromFragment();
+    if(!token){
+      // pas de token : redirection vers login
+      location.href = '/login.html';
+    }
+
+    document.getElementById('userArea').innerText = 'Connecté';
+
+    const vrefInput = document.getElementById('vrefInput');
+    const headingInput = document.getElementById('headingInput');
+    const telemetry = document.getElementById('telemetry');
+    const speedGauge = document.getElementById('speedGauge');
+    const compass = document.getElementById('compassCanvas');
+    const ctx = compass.getContext('2d');
+
+    function drawCompass(angle){
+      ctx.clearRect(0,0,200,200);
+      ctx.save();
+      ctx.translate(100,100);
+      ctx.rotate((angle-90) * Math.PI/180);
+      ctx.beginPath();
+      ctx.moveTo(0,-70);
+      ctx.lineTo(10,0);
+      ctx.lineTo(-10,0);
+      ctx.closePath();
+      ctx.fillStyle = 'crimson';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function updateTelemetry(){
+      fetch('/data')
+        .then(r=>r.json())
+        .then(j=>{
+          telemetry.textContent = JSON.stringify(j, null, 2);
+          // update gauge (simple width)
+          const pct = Math.min(1, j.vref / 30);
+          speedGauge.style.width = Math.max(4, Math.round(180 * pct)) + 'px';
+          drawCompass(j.targetAngle || 0);
+        })
+        .catch(e=>{ telemetry.textContent = 'Erreur: '+e; });
+    }
+
+    document.getElementById('applyBtn').addEventListener('click', ()=>{
+      const v = vrefInput.value;
+      const h = headingInput.value;
+      const token = getTokenFromFragment();
+      let url = '/set?vref='+encodeURIComponent(v)+'&heading='+encodeURIComponent(h)+'&enable=1';
+      if(token) url += '&token='+encodeURIComponent(token);
+      fetch(url)
+        .then(r=>r.json())
+        .then(j=>{ console.log('set', j); })
+        .catch(e=>console.error(e));
+    });
+
+    // Refresh périodiquement
+    updateTelemetry();
+    setInterval(updateTelemetry, 2000);
+
+  </script>
+</body>
+</html>

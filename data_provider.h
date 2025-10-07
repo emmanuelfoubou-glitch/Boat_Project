@@ -23,6 +23,8 @@ extern float motorTemp;
 // When true, the control sketch should use vref and public_targetAngle set
 // remotely via the web server instead of local potentiometers.
 extern volatile bool remoteSetpointsEnabled;
+// Simple auth token (store generated token here)
+extern String remoteAuthToken;
 
 // Returns a JSON string with the current telemetry
 String getDataJSON();

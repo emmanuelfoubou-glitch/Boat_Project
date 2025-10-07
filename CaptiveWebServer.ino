@@ -4,6 +4,8 @@
 #include <aWOT.h>
 // Inclut notre fournisseur de données JSON (variables partagées et getDataJSON())
 #include "data_provider.h"
+// Contenu web embarqué (login/dashboard/style)
+#include "web/web_content.h"
 
 // includ spi .
 
@@ -66,6 +68,8 @@ void setHandler(Request &req, Response &res) {
   // path peut être "/set?vref=...&heading=..." ; chercher '?' et prendre la query
   int qpos = path.indexOf('?');
   bool updated = false;
+  // token must be provided as a query param 'token' or request is unauthorized
+  String providedToken = "";
   if (qpos >= 0) {
     String query = path.substring(qpos + 1);
     // Séparer les paires key=value
@@ -79,6 +83,9 @@ void setHandler(Request &req, Response &res) {
         String key = pair.substring(0, eq);
         String val = pair.substring(eq + 1);
         // Convertir et appliquer
+        if (key == "token") {
+          providedToken = val;
+        }
         if (key == "vref") {
           double v = val.toDouble();
           remote_vref = v;
@@ -96,6 +103,13 @@ void setHandler(Request &req, Response &res) {
     }
   }
 
+  // Validate token
+  if (remoteAuthToken.length() == 0 || providedToken != remoteAuthToken) {
+    res.print("HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\r\n");
+    res.print("{\"error\":\"unauthorized\"}");
+    return;
+  }
+
   // Répondre avec l'état actuel
   res.print("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
   String out = "{";
@@ -104,6 +118,70 @@ void setHandler(Request &req, Response &res) {
   out += "\"remote_targetAngle\":" + String(remote_targetAngle, 2);
   out += "}";
   res.print(out);
+}
+
+// Hardcoded credentials (change these before déploiement)
+const char* ADMIN_USER = "admin";
+const char* ADMIN_PASS = "boatpass";
+
+// Simple login handler: expects ?user=...&pass=... and returns a small page
+// that stores token in fragment and redirects to /dashboard
+void loginHandler(Request &req, Response &res) {
+  String path = req.path();
+  int qpos = path.indexOf('?');
+  // If no query string, serve the login page HTML
+  if (qpos == -1) {
+    // Serve the login page from web_content.h
+    res.print("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+    res.print(login_page);
+    return;
+  }
+
+  // Otherwise process credentials from query string
+  String user="", pass="";
+  String query = path.substring(qpos+1);
+  int start = 0;
+  while (start < query.length()) {
+    int amp = query.indexOf('&', start);
+    if (amp == -1) amp = query.length();
+    String pair = query.substring(start, amp);
+    int eq = pair.indexOf('=');
+    if (eq>0) {
+      String k = pair.substring(0, eq);
+      String v = pair.substring(eq+1);
+      if (k=="user") user = v;
+      if (k=="pass") pass = v;
+    }
+    start = amp+1;
+  }
+
+  bool ok = (user == String(ADMIN_USER) && pass == String(ADMIN_PASS));
+  if (ok) {
+    // generate token and return a page that redirects with token in fragment
+    remoteAuthToken = generateToken();
+    String body = "<html><body>";
+    body += "<script>location.href='/dashboard.html#token=" + remoteAuthToken + "';</script>";
+    body += "</body></html>";
+    res.print("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+    res.print(body);
+  } else {
+    res.print("HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\n\r\n");
+    res.print("Unauthorized");
+  }
+}
+
+// Serve minimal style (you have a full style.css in /web but this is embedded)
+void styleHandler(Request &req, Response &res) {
+  // Inlined minimal CSS; for full design use the file in the web/ folder
+  res.print("HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n");
+  res.print(style_css);
+}
+
+// Dashboard page (minimal embedded version). The richer static files are in /web
+void dashboardHandler(Request &req, Response &res) {
+  // Serve the dashboard page from web_content.h
+  res.print("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+  res.print(dashboard_page);
 }
 
 
@@ -156,6 +234,11 @@ void setup() {
   app.get("/data", &dataHandler);
   // Endpoint pour définir des consignes à distance (vref, heading)
   app.get("/set", &setHandler);
+  // Login endpoint (authentification) et pages
+  app.get("/login", &loginHandler);
+  app.get("/login.html", &loginHandler);
+  app.get("/dashboard.html", &dashboardHandler);
+  app.get("/style.css", &styleHandler);
 
   // Route de secours pour les chemins non trouvés (404)
   // Attention : la signature et l'API exacte de aWOT peuvent varier selon
