@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <QMC5883LCompass.h>
+#include "data_provider.h"
 
 //DC MOTOR DRIVER
 int motorMoins = 6;
@@ -85,6 +86,14 @@ void setup() {
 
   servo.attach(9);
 
+  // Initialize shared telemetry values
+  public_goodAngle = 0;
+  public_targetAngle = 0;
+  // gpsLat/gpsLon/motorTemp can be set here if you have sensors
+  gpsLat = 0.0;
+  gpsLon = 0.0;
+  motorTemp = 0.0;
+
   // Timer
   tick_codeur = 0;
   FlexiTimer2::set(CADENCE_MS, 1 / 1000., calculs);
@@ -137,6 +146,12 @@ void loop() {
  // monServo.write(angle);
 
   Serial.println(String(omega) + "  " + String(temps) + "  " + String(commande) + "  vref:" + String(vref) + "  servo:" + String(goodAngle) + "target:" + String(targetAngle));
+
+  // Update shared telemetry so the web server can read current values
+  public_goodAngle = goodAngle;
+  public_targetAngle = targetAngle;
+  // motorTemp and GPS values should be updated here when sensors are added
+  // gpsLat = ...; gpsLon = ...; motorTemp = ...;
 }
 
 void commandeMoteur(double commande) {
@@ -167,6 +182,12 @@ void calculs() {
 
   temps += dt;
   previous_error = ecart;
+
+  // copy volatile values into shared variables for the web JSON provider
+  ::omega = omega;
+  ::temps = temps;
+  ::commande = commande;
+  ::vref = vref;
 }
 
 void updateEncoderA() {

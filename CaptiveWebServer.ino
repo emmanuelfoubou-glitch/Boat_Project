@@ -1,5 +1,6 @@
 #include <WiFiNINA.h>
 #include <aWOT.h>
+#include "data_provider.h"
 
 // includ spi .
 
@@ -38,8 +39,9 @@ String getDataJSON() {
 // Handler for the /data endpoint: returns the JSON produced by getDataJSON().
 void dataHandler(Request &req, Response &res) {
   Serial.println("answer to /data");
-  // Return the JSON payload. If you want the correct Content-Type header and
-  // your aWOT version doesn't set it automatically, you can add it here.
+  // Send headers (some aWOT versions expect the body only, others need full
+  // headers). Writing headers manually is the most compatible approach.
+  res.print("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
   res.print(getDataJSON());
 }
 

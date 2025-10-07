@@ -1,0 +1,31 @@
+// data_provider.cpp
+#include "data_provider.h"
+
+// Define defaults in case controle_cap_vitesse doesn't set them yet
+volatile double omega = 0;
+volatile double temps = 0;
+volatile double commande = 0;
+volatile double vref = 0;
+
+float public_goodAngle = 0;
+float public_targetAngle = 0;
+
+double gpsLat = 0.0;
+double gpsLon = 0.0;
+float motorTemp = 0.0;
+
+String getDataJSON() {
+  // Build a compact JSON string. Keep memory usage small by using String
+  // concatenation carefully.
+  String s = "{";
+  s += "\"time\":" + String((unsigned long)temps) + ",";
+  s += "\"omega\":" + String(omega, 4) + ",";
+  s += "\"commande\":" + String(commande, 4) + ",";
+  s += "\"vref\":" + String(vref, 4) + ",";
+  s += "\"goodAngle\":" + String(public_goodAngle, 2) + ",";
+  s += "\"targetAngle\":" + String(public_targetAngle, 2) + ",";
+  s += "\"gps\":{\"lat\":" + String(gpsLat, 6) + ",\"lon\":" + String(gpsLon, 6) + "},";
+  s += "\"motorTemp\":" + String(motorTemp, 2);
+  s += "}";
+  return s;
+}
