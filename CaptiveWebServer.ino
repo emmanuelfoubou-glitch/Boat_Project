@@ -1,19 +1,31 @@
+// Inclut la bibliothèque WiFiNINA pour gérer le WiFi sur cartes compatibles
 #include <WiFiNINA.h>
+// Inclut aWOT, un micro-framework pour créer des routes HTTP et répondre aux requêtes
 #include <aWOT.h>
+// Inclut notre fournisseur de données JSON (variables partagées et getDataJSON())
 #include "data_provider.h"
 
 // includ spi .
 
-char ssid[] = "Fasaboat_02";        // your network SSID (name)
-char pass[] = "1234567890";    // your network password
+// Nom du point d'accès (SSID) que la carte créera
+char ssid[] = "Fasaboat_02";
+// Mot de passe du point d'accès
+char pass[] = "1234567890";
 
+// Variable qui contient l'état actuel du module WiFi
 int status = WL_IDLE_STATUS;
 
+// Objet serveur TCP qui écoute sur le port 80 (HTTP)
 WiFiServer server(80);
+// Instance de l'application aWOT pour enregistrer des routes et traiter les requêtes
 Application app;
 
+// Handler pour la route racine "/" : reçoit la requête et remplit la réponse
 void index(Request &req, Response &res) {
+  // Log sur le port série pour debugging
   Serial.println("answer to index =)");
+  // Écrit le corps de la réponse (ici un petit message HTML) ; aWOT
+  // enverra ces données sur le client
   res.print("Hello World!<br><h1>" + String(millis()));
 }
 
@@ -36,115 +48,128 @@ String getDataJSON() {
   return json;
 }
 
-// Handler for the /data endpoint: returns the JSON produced by getDataJSON().
+// Handler pour l'endpoint "/data" : renvoie le JSON construit par getDataJSON()
 void dataHandler(Request &req, Response &res) {
+  // Indique dans le moniteur série qu'on sert /data
   Serial.println("answer to /data");
-  // Send headers (some aWOT versions expect the body only, others need full
-  // headers). Writing headers manually is the most compatible approach.
+  // On écrit manuellement l'entête HTTP avec le Content-Type JSON afin de
+  // rester compatible avec différentes versions de aWOT.
   res.print("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
+  // Écrit le corps JSON récupéré depuis data_provider
   res.print(getDataJSON());
 }
 
 
+// Fonction d'initialisation exécutée une fois au démarrage
 void setup() {
-  //Initialize serial and wait for port to open:
+  // Initialise la communication série (moniteur série)
   Serial.begin(9600);
+  // Attendre que le port série soit prêt (utile sur certaines cartes)
   while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
+    ; // attente active
   }
 
+  // Message d'information dans le moniteur série
   Serial.println("Access Point Web Server");
 
-
-  // check for the WiFi module:
+  // Vérifie que le module WiFi est présent
   if (WiFi.status() == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
-    // don't continue
+    // Bloque ici car sans module WiFi le sketch ne peut pas continuer
     while (true);
   }
 
+  // Vérifie la version du firmware du module WiFi
   String fv = WiFi.firmwareVersion();
   if (fv < "1.0.0") {
     Serial.println("Please upgrade the firmware");
   }
 
-  // local IP address of will be 10.0.0.1
-   WiFi.config(IPAddress(10, 0, 0, 1));
+  // Configure une IP locale fixe pour le point d'accès (ici 10.0.0.1)
+  WiFi.config(IPAddress(10, 0, 0, 1));
 
-  // print the network name (SSID);
+  // Affiche le nom du point d'accès que l'on va créer
   Serial.print("Creating access point named: ");
   Serial.println(ssid);
 
-  // Create open network. Change this line if you want to create an WEP network:
+  // Crée le point d'accès WiFi (mode AP) avec SSID et mot de passe
   status = WiFi.beginAP(ssid, pass);
+  // Vérifie si la création a réussi (mode écoute)
   if (status != WL_AP_LISTENING) {
     Serial.println("Creating access point failed");
-    // don't continue
+    // Bloque si échec
     while (true);
   }
 
-  // wait 10 seconds for connection:
+  // Petite attente pour laisser le temps aux clients de se connecter
   delay(10000);
 
-
-  //start web server
+  // Enregistre la route racine et l'endpoint /data
   app.get("/", &index);
-  // register /data endpoint
   app.get("/data", &dataHandler);
-  // optional: fallback 404 route
+
+  // Route de secours pour les chemins non trouvés (404)
+  // Attention : la signature et l'API exacte de aWOT peuvent varier selon
+  // la version. Ici on utilise une lambda qui écrit une réponse 404 simple.
   app.notFound([](Request &req, Response &res){
+    // Log du chemin non trouvé
     Serial.println("404 for: " + req.path());
+    // Écrit manuellement l'entête 404 et un corps texte
     res.print("HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n");
     res.print("Not Found");
   });
+
+  // Démarre le serveur TCP
   server.begin();
 
-  // you're connected now, so print out the status
+  // Affiche les informations réseau (SSID, IP, etc.)
   printWiFiStatus();
 
 }
 
+// Boucle principale répétée en continu
 void loop() {
 
-
-  // compare the previous status to the current status
+  // Si l'état WiFi a changé, on en informe le moniteur série
   if (status != WiFi.status()) {
-    // it has changed update the variable
+    // Met à jour la variable d'état
     status = WiFi.status();
 
     if (status == WL_AP_CONNECTED) {
-      // a device has connected to the AP
+      // Un appareil s'est connecté au point d'accès
       Serial.println("Device connected to AP");
     } else {
-      // a device has disconnected from the AP, and we are back in listening mode
+      // Un appareil s'est déconnecté
       Serial.println("Device disconnected from AP");
     }
   }
 
-
-
-
+  // Récupère un client TCP si quelqu'un a fait une requête
   WiFiClient client = server.available();
 
+  // Si le client est bien connecté, on délègue le traitement à aWOT
   if (client.connected()) {
+    // Log utile pour debug
     Serial.println("Serving connected client : "  + String(client));
 
+    // aWOT va lire la requête, appeler le handler adapté et écrire la réponse
     app.process(&client);
   }
 }
 
 
+// Affiche des informations réseau utiles dans le moniteur série
 void printWiFiStatus() {
-  // print the SSID of the network you're attached to:
+  // Affiche le SSID du point d'accès
   Serial.print("SSID: ");
   Serial.println(WiFi.SSID());
 
-  // print your WiFi shield's IP address:
+  // Récupère et affiche l'adresse IP locale
   IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
   Serial.println(ip);
 
-  // print where to go in a browser:
+  // Indique à l'utilisateur quelle adresse ouvrir dans un navigateur
   Serial.print("To see this page in action, open a browser to http://");
   Serial.println(ip);
 
