@@ -12,6 +12,13 @@
       <h1>Tableau de bord</h1>
       <div id="userArea"></div>
     </header>
+    <!-- Status bar: serveur et capteurs -->
+    <div class="status-bar">
+      <span id="serverStatus" class="status red">Serveur: inconnu</span>
+      <span id="gpsStatus" class="status red">GPS: inconnu</span>
+      <span id="motorStatus" class="status red">Moteur: inconnu</span>
+      <span id="compassStatus" class="status red">Boussole: inconnu</span>
+    </div>
 
     <main>
       <section class="row">
@@ -62,6 +69,10 @@
     const speedGauge = document.getElementById('speedGauge');
     const compass = document.getElementById('compassCanvas');
     const ctx = compass.getContext('2d');
+  const serverStatus = document.getElementById('serverStatus');
+  const gpsStatus = document.getElementById('gpsStatus');
+  const motorStatus = document.getElementById('motorStatus');
+  const compassStatus = document.getElementById('compassStatus');
 
     function drawCompass(angle){
       ctx.clearRect(0,0,200,200);
@@ -78,17 +89,44 @@
       ctx.restore();
     }
 
+    function setOk(el, txt){ el.className = 'status green'; el.textContent = txt; }
+    function setFail(el, txt){ el.className = 'status red'; el.textContent = txt; }
+
     function updateTelemetry(){
       fetch('/data')
-        .then(r=>r.json())
+        .then(r=>{
+          if(!r.ok) throw new Error('HTTP '+r.status);
+          return r.json();
+        })
         .then(j=>{
+          // serveur reachable
+          setOk(serverStatus, 'Serveur: connecté');
           telemetry.textContent = JSON.stringify(j, null, 2);
           // update gauge (simple width)
           const pct = Math.min(1, j.vref / 30);
           speedGauge.style.width = Math.max(4, Math.round(180 * pct)) + 'px';
           drawCompass(j.targetAngle || 0);
+
+          // GPS: considéré connecté si lat/lon != 0
+          if (j.gps && (j.gps.lat != 0 || j.gps.lon != 0)) setOk(gpsStatus, 'GPS: connecté');
+          else setFail(gpsStatus, 'GPS: déconnecté');
+
+          // Moteur: connecté si omega ou commande non nuls
+          if ((j.omega && Math.abs(j.omega) > 0.0001) || (j.commande && Math.abs(j.commande) > 0.0001)) setOk(motorStatus, 'Moteur: actif');
+          else setFail(motorStatus, 'Moteur: inactif');
+
+          // Boussole: connecté si targetAngle / goodAngle présents
+          if ((j.targetAngle && Math.abs(j.targetAngle) >= 0) || (j.goodAngle && Math.abs(j.goodAngle) >= 0)) setOk(compassStatus, 'Boussole: ok');
+          else setFail(compassStatus, 'Boussole: déconnectée');
         })
-        .catch(e=>{ telemetry.textContent = 'Erreur: '+e; });
+        .catch(e=>{
+          // serveur non reachable
+          setFail(serverStatus, 'Serveur: déconnecté');
+          telemetry.textContent = 'Aucune donnée (serveur non accessible)';
+          setFail(gpsStatus, 'GPS: inconnu');
+          setFail(motorStatus, 'Moteur: inconnu');
+          setFail(compassStatus, 'Boussole: inconnu');
+        });
     }
 
     document.getElementById('applyBtn').addEventListener('click', ()=>{

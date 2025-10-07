@@ -57,7 +57,13 @@ static const char dashboard_page[] PROGMEM = R"rawliteral(<!doctype html>
       <h1>Tableau de bord</h1>
       <div id="userArea"></div>
     </header>
-
+    <!-- Status bar: serveur et capteurs -->
+    <div class="status-bar">
+      <span id="serverStatus" class="status red">Serveur: inconnu</span>
+      <span id="gpsStatus" class="status red">GPS: inconnu</span>
+      <span id="motorStatus" class="status red">Moteur: inconnu</span>
+      <span id="compassStatus" class="status red">Boussole: inconnu</span>
+    </div>
     <main>
       <section class="row">
         <div class="card">
@@ -108,7 +114,7 @@ static const char dashboard_page[] PROGMEM = R"rawliteral(<!doctype html>
     const compass = document.getElementById('compassCanvas');
     const ctx = compass.getContext('2d');
 
-    function drawCompass(angle){
+  function drawCompass(angle){
       ctx.clearRect(0,0,200,200);
       ctx.save();
       ctx.translate(100,100);
@@ -123,17 +129,49 @@ static const char dashboard_page[] PROGMEM = R"rawliteral(<!doctype html>
       ctx.restore();
     }
 
+    const serverStatus = document.getElementById('serverStatus');
+    const gpsStatus = document.getElementById('gpsStatus');
+    const motorStatus = document.getElementById('motorStatus');
+    const compassStatus = document.getElementById('compassStatus');
+
+    function setOk(el, txt){ el.className = 'status green'; el.textContent = txt; }
+    function setFail(el, txt){ el.className = 'status red'; el.textContent = txt; }
+
     function updateTelemetry(){
       fetch('/data')
-        .then(r=>r.json())
+        .then(r=>{
+          if(!r.ok) throw new Error('HTTP '+r.status);
+          return r.json();
+        })
         .then(j=>{
+          // serveur reachable
+          setOk(serverStatus, 'Serveur: connecté');
           telemetry.textContent = JSON.stringify(j, null, 2);
           // update gauge (simple width)
           const pct = Math.min(1, j.vref / 30);
           speedGauge.style.width = Math.max(4, Math.round(180 * pct)) + 'px';
           drawCompass(j.targetAngle || 0);
+
+          // GPS: considéré connecté si lat/lon != 0
+          if (j.gps && (j.gps.lat != 0 || j.gps.lon != 0)) setOk(gpsStatus, 'GPS: connecté');
+          else setFail(gpsStatus, 'GPS: déconnecté');
+
+          // Moteur: connecté si omega ou commande non nuls
+          if ((j.omega && Math.abs(j.omega) > 0.0001) || (j.commande && Math.abs(j.commande) > 0.0001)) setOk(motorStatus, 'Moteur: actif');
+          else setFail(motorStatus, 'Moteur: inactif');
+
+          // Boussole: connecté si targetAngle / goodAngle présents
+          if ((j.targetAngle && Math.abs(j.targetAngle) >= 0) || (j.goodAngle && Math.abs(j.goodAngle) >= 0)) setOk(compassStatus, 'Boussole: ok');
+          else setFail(compassStatus, 'Boussole: déconnectée');
         })
-        .catch(e=>{ telemetry.textContent = 'Erreur: '+e; });
+        .catch(e=>{
+          // serveur non reachable
+          setFail(serverStatus, 'Serveur: déconnecté');
+          telemetry.textContent = 'Aucune donnée (serveur non accessible)';
+          setFail(gpsStatus, 'GPS: inconnu');
+          setFail(motorStatus, 'Moteur: inconnu');
+          setFail(compassStatus, 'Boussole: inconnu');
+        });
     }
 
     document.getElementById('applyBtn').addEventListener('click', ()=>{
@@ -166,6 +204,11 @@ header{display:flex;justify-content:space-between;align-items:center}
 input[type=range]{width:100%}
 button{background:#0066cc;color:#fff;padding:8px 12px;border:none;border-radius:4px;cursor:pointer}
 pre{white-space:pre-wrap}
+
+.status-bar{display:flex;gap:8px;padding:8px}
+.status{padding:6px 10px;border-radius:6px;color:#fff;font-weight:600}
+.status.green{background:#28a745}
+.status.red{background:#dc3545}
 )rawliteral";
 
 #endif // WEB_CONTENT_H
