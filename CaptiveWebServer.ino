@@ -59,6 +59,53 @@ void dataHandler(Request &req, Response &res) {
   res.print(getDataJSON());
 }
 
+// Parse a query string like "vref=12.3&heading=45" and update remote setpoints
+void setHandler(Request &req, Response &res) {
+  Serial.println("answer to /set");
+  String path = req.path();
+  // path peut être "/set?vref=...&heading=..." ; chercher '?' et prendre la query
+  int qpos = path.indexOf('?');
+  bool updated = false;
+  if (qpos >= 0) {
+    String query = path.substring(qpos + 1);
+    // Séparer les paires key=value
+    int start = 0;
+    while (start < query.length()) {
+      int amp = query.indexOf('&', start);
+      if (amp == -1) amp = query.length();
+      String pair = query.substring(start, amp);
+      int eq = pair.indexOf('=');
+      if (eq > 0) {
+        String key = pair.substring(0, eq);
+        String val = pair.substring(eq + 1);
+        // Convertir et appliquer
+        if (key == "vref") {
+          double v = val.toDouble();
+          remote_vref = v;
+          updated = true;
+        } else if (key == "heading" || key == "cap") {
+          float a = val.toFloat();
+          remote_targetAngle = a;
+          updated = true;
+        } else if (key == "enable") {
+          if (val == "1" || val == "true") remoteSetpointsEnabled = true;
+          else remoteSetpointsEnabled = false;
+        }
+      }
+      start = amp + 1;
+    }
+  }
+
+  // Répondre avec l'état actuel
+  res.print("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
+  String out = "{";
+  out += "\"remoteSetpointsEnabled\":" + String(remoteSetpointsEnabled ? 1 : 0) + ",";
+  out += "\"remote_vref\":" + String(remote_vref, 4) + ",";
+  out += "\"remote_targetAngle\":" + String(remote_targetAngle, 2);
+  out += "}";
+  res.print(out);
+}
+
 
 // Fonction d'initialisation exécutée une fois au démarrage
 void setup() {
@@ -107,6 +154,8 @@ void setup() {
   // Enregistre la route racine et l'endpoint /data
   app.get("/", &index);
   app.get("/data", &dataHandler);
+  // Endpoint pour définir des consignes à distance (vref, heading)
+  app.get("/set", &setHandler);
 
   // Route de secours pour les chemins non trouvés (404)
   // Attention : la signature et l'API exacte de aWOT peuvent varier selon

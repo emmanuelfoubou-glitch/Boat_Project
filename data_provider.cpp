@@ -14,6 +14,19 @@ double gpsLat = 0.0;
 double gpsLon = 0.0;
 float motorTemp = 0.0;
 
+// Remote setpoints and control flag
+volatile double remote_vref = 0.0;
+volatile float remote_targetAngle = 0.0;
+volatile bool remoteSetpointsEnabled = false;
+
+// Helper functions (optional) to set remote setpoints from other translation units
+void setRemoteVref(double v) {
+  remote_vref = v;
+}
+void setRemoteTargetAngle(float a) {
+  remote_targetAngle = a;
+}
+
 String getDataJSON() {
   // Build a compact JSON string. Keep memory usage small by using String
   // concatenation carefully.

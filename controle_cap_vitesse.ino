@@ -135,7 +135,12 @@ void loop() {
   // Lecture du potentiomètre pour la consigne de vitesse
   int potValue = analogRead(POT_VITESSE); // plage [0, 1023]
   // Remise à l'échelle : ici on mappe 0..1023 -> 0..30 (valeur arbitraire)
-  vref = (potValue / 1023.0) * 30.0;       // Remap à [0, 30]
+  // Si la commande distante est activée, utiliser remote_vref à la place
+  if (remoteSetpointsEnabled) {
+    vref = remote_vref;
+  } else {
+    vref = (potValue / 1023.0) * 30.0;       // Remap à [0, 30]
+  }
 
   // Lecture de la boussole (met à jour les registres internes)
   int x, y, z;
@@ -154,6 +159,10 @@ void loop() {
 
   // Convertit la lecture du potentiomètre de cap en angle cible [0..180]
   float targetAngle = map(potValueReference, 0, 1023, 0, 180);
+  // Si la commande distante est activée, on prend la valeur envoyée par le serveur
+  if (remoteSetpointsEnabled) {
+    targetAngle = remote_targetAngle;
+  }
 
   // Calcul de l'erreur entre angle cible et angle mesuré
   float error = targetAngle - angleZ;
