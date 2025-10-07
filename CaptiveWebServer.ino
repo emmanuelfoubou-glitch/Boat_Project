@@ -3,7 +3,7 @@
 
 // includ spi .
 
-char ssid[] = "Group07";        // your network SSID (name)
+char ssid[] = "Fasaboat_02";        // your network SSID (name)
 char pass[] = "1234567890";    // your network password
 
 int status = WL_IDLE_STATUS;
@@ -13,92 +13,91 @@ Application app;
 
 void index(Request &req, Response &res) {
   Serial.println("answer to index =)");
-  res.print("Hello World!<br><h1>" + String(millis()));
-// Bibliothèque pour gérer le module Wi‑Fi (fonctions de connexion, AP, clients, etc.)
-#include <WiFiNINA.h>
-// Bibliothèque aWOT pour créer un serveur HTTP léger et définir des routes (Request/Response)
-#include <aWOT.h>
-
-// Commentaire: si vous utilisez SPI explicitement, vous pouvez inclure <SPI.h> ici.
-// includ spi .
-
-// Nom du réseau Wi‑Fi (SSID) que l'appareil va créer en mode point d'accès (AP)
-char ssid[] = "Group07";        // your network SSID (name)
-// Mot de passe du point d'accès (attention: en clair dans le code)
-char pass[] = "1234567890";    // your network password
-
-// Variable pour stocker l'état courant du module Wi‑Fi (initialisée à l'état idle)
-int status = WL_IDLE_STATUS;
-
-// Crée un serveur TCP qui écoutera sur le port 80 (HTTP)
-WiFiServer server(80);
-// Instance de l'application aWOT qui gère les routes et les réponses HTTP
-Application app;
-
-// Handler pour la route racine "/" : reçoit la requête et remplit la réponse
-void index(Request &req, Response &res) {
-  // Affiche un message sur le moniteur série pour le debug quand / est demandé
-  Serial.println("answer to index =)");
-  // Écrit dans la réponse HTTP la chaîne "Hello World!" et le temps écoulé (millis)
   res.print("Hello World!<br><h1>" + String(millis()));
 }
 
 
+// Returns a small JSON string with sample data. You can expand this to include
+// real sensor readings or other telemetry.
+String getDataJSON() {
+  unsigned long t = millis();
+  // Example sensor/sample value. Replace or remove analogRead if your board
+  // doesn't support it or you don't need it.
+  int sample = 0;
+#ifdef A0
+  sample = analogRead(A0);
+#endif
+
+  String json = "{";
+  json += "\"time\":" + String(t) + ",";
+  json += "\"sample\":" + String(sample);
+  json += "}";
+  return json;
+}
+
+// Handler for the /data endpoint: returns the JSON produced by getDataJSON().
+void dataHandler(Request &req, Response &res) {
+  Serial.println("answer to /data");
+  // Return the JSON payload. If you want the correct Content-Type header and
+  // your aWOT version doesn't set it automatically, you can add it here.
+  res.print(getDataJSON());
+}
+
+
 void setup() {
-  // Initialise la communication série à 9600 bauds pour debug
+  //Initialize serial and wait for port to open:
   Serial.begin(9600);
-  // Sur certaines cartes USB natives, il faut attendre la connexion du moniteur série
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  // Message indiquant le démarrage du serveur AP
   Serial.println("Access Point Web Server");
 
 
-  // Vérifie que le module Wi‑Fi est présent et communicant
+  // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
-    // Si aucun module détecté, affiche l'erreur
     Serial.println("Communication with WiFi module failed!");
-    // Arrête le programme ici (boucle infinie) car sans module le réseau ne fonctionnera pas
+    // don't continue
     while (true);
   }
 
-  // Récupère la version du firmware du module Wi‑Fi
   String fv = WiFi.firmwareVersion();
-  // Si la version est inférieure à 1.0.0, prévient que la mise à jour est recommandée
   if (fv < "1.0.0") {
     Serial.println("Please upgrade the firmware");
   }
 
-  // Configure une adresse IP locale fixe pour l'interface (ici 10.0.0.1)
-  // Utile en mode AP pour que les clients puissent accéder à cette IP
+  // local IP address of will be 10.0.0.1
    WiFi.config(IPAddress(10, 0, 0, 1));
 
-  // Affiche le SSID que l'on va créer
+  // print the network name (SSID);
   Serial.print("Creating access point named: ");
   Serial.println(ssid);
 
-  // Démarre le point d'accès (AP) avec le SSID et le mot de passe fournis
-  // Renvoie un statut qu'on stocke dans la variable `status`
+  // Create open network. Change this line if you want to create an WEP network:
   status = WiFi.beginAP(ssid, pass);
-  // Vérifie que l'AP a bien démarré et est en écoute
   if (status != WL_AP_LISTENING) {
-    // Si échec, affiche un message et bloque l'exécution
     Serial.println("Creating access point failed");
+    // don't continue
     while (true);
   }
 
-  // Attente 10 secondes pour laisser le temps aux clients de se connecter
+  // wait 10 seconds for connection:
   delay(10000);
 
 
-  // Enregistre le handler `index` pour la route GET "/"
+  //start web server
   app.get("/", &index);
-  // Démarre le serveur TCP pour accepter les connexions HTTP
+  // register /data endpoint
+  app.get("/data", &dataHandler);
+  // optional: fallback 404 route
+  app.notFound([](Request &req, Response &res){
+    Serial.println("404 for: " + req.path());
+    res.print("HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n");
+    res.print("Not Found");
+  });
   server.begin();
 
-  // Affiche des informations sur le Wi‑Fi (SSID, IP, URL à ouvrir)
+  // you're connected now, so print out the status
   printWiFiStatus();
 
 }
@@ -106,48 +105,44 @@ void setup() {
 void loop() {
 
 
-  // Compare l'état Wi‑Fi précédent (stocké dans `status`) avec l'état actuel
+  // compare the previous status to the current status
   if (status != WiFi.status()) {
-    // Si changement, met à jour `status`
+    // it has changed update the variable
     status = WiFi.status();
 
     if (status == WL_AP_CONNECTED) {
-      // Un appareil s'est connecté au point d'accès
+      // a device has connected to the AP
       Serial.println("Device connected to AP");
     } else {
-      // Un appareil s'est déconnecté (ou autre état), on est en écoute
+      // a device has disconnected from the AP, and we are back in listening mode
       Serial.println("Device disconnected from AP");
     }
   }
 
 
 
-  // Vérifie s'il y a un client TCP disponible (connexion entrante)
+
   WiFiClient client = server.available();
 
-  // Si le client est connecté, on le sert
   if (client.connected()) {
-    // Log: sert un client connecté (String(client) n'affiche pas forcément l'IP lisible)
     Serial.println("Serving connected client : "  + String(client));
 
-    // Passe le client à aWOT pour qu'il traite la requête HTTP et envoie la réponse
     app.process(&client);
   }
 }
 
 
-// Fonction utilitaire qui affiche des informations réseau sur le port série
 void printWiFiStatus() {
-  // Affiche le SSID du réseau (AP ou réseau connecté)
+  // print the SSID of the network you're attached to:
   Serial.print("SSID: ");
   Serial.println(WiFi.SSID());
 
-  // Récupère et affiche l'adresse IP locale
+  // print your WiFi shield's IP address:
   IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
   Serial.println(ip);
 
-  // Affiche l'URL à ouvrir dans un navigateur (http://<ip>)
+  // print where to go in a browser:
   Serial.print("To see this page in action, open a browser to http://");
   Serial.println(ip);
 
