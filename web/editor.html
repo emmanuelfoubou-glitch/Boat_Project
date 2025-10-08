@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Editeur de valeurs - Backend table</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Éditeur de valeurs (backend table)</h1>
+    <p>Utilisez ce formulaire pour insérer manuellement les valeurs envoyées au dashboard.</p>
+    <form id="tableForm">
+      <label>Vitesse (vref)</label>
+      <input id="vref" name="vref" type="number" step="0.01">
+
+      <label>Cap (targetAngle)</label>
+      <input id="targetAngle" name="targetAngle" type="number" step="0.1">
+
+      <label>Omega</label>
+      <input id="omega" name="omega" type="number" step="0.0001">
+
+      <label>Temps</label>
+      <input id="temps" name="temps" type="number" step="0.001">
+
+      <label>Commande</label>
+      <input id="commande" name="commande" type="number" step="0.01">
+
+      <label>GPS lat</label>
+      <input id="gpsLat" name="gpsLat" type="number" step="0.000001">
+      <label>GPS lon</label>
+      <input id="gpsLon" name="gpsLon" type="number" step="0.000001">
+
+      <label>Motor Temp</label>
+      <input id="motorTemp" name="motorTemp" type="number" step="0.1">
+
+      <button type="submit">Envoyer au serveur</button>
+    </form>
+
+    <div id="msg"></div>
+  </div>
+
+  <script>
+    function getTokenFromFragment(){
+      const hash = location.hash.substring(1);
+      if(!hash) return null;
+      try{ const params = new URLSearchParams(hash); return params.get('token'); }catch(e){return null}
+    }
+    const token = getTokenFromFragment();
+    if(!token){ alert('Pas de token trouvé. Connectez-vous via /login.html'); }
+
+    function loadTable(){
+      fetch('/table')
+        .then(r=>r.json())
+        .then(j=>{
+          document.getElementById('vref').value = j.vref || '';
+          document.getElementById('targetAngle').value = j.targetAngle || '';
+          document.getElementById('omega').value = j.omega || '';
+          document.getElementById('temps').value = j.temps || '';
+          document.getElementById('commande').value = j.commande || '';
+          document.getElementById('gpsLat').value = j.gpsLat || '';
+          document.getElementById('gpsLon').value = j.gpsLon || '';
+          document.getElementById('motorTemp').value = j.motorTemp || '';
+        })
+        .catch(e=>{ document.getElementById('msg').innerText = 'Impossible de charger la table: '+e; });
+    }
+
+    document.getElementById('tableForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      const params = new URLSearchParams();
+      ['vref','targetAngle','omega','temps','commande','gpsLat','gpsLon','motorTemp'].forEach(k=>{
+        const v = document.getElementById(k).value;
+        if(v !== '') params.append(k, v);
+      });
+      if(token) params.append('token', token);
+      fetch('/table/set?'+params.toString())
+        .then(r=>r.json())
+        .then(j=>{ document.getElementById('msg').innerText = 'Serveur: '+JSON.stringify(j); })
+        .catch(e=>{ document.getElementById('msg').innerText = 'Erreur: '+e; });
+    });
+
+    loadTable();
+  </script>
+</body>
+</html>

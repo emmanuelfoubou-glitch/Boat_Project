@@ -184,6 +184,61 @@ void dashboardHandler(Request &req, Response &res) {
   res.print(dashboard_page);
 }
 
+// Return the editable table as JSON
+void tableHandler(Request &req, Response &res) {
+  res.print("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n");
+  String out = "{";
+  out += "\"vref\":" + String(table_vref, 4) + ",";
+  out += "\"targetAngle\":" + String(table_targetAngle, 2) + ",";
+  out += "\"omega\":" + String(table_omega, 4) + ",";
+  out += "\"temps\":" + String(table_temps, 4) + ",";
+  out += "\"commande\":" + String(table_commande, 4) + ",";
+  out += "\"gpsLat\":" + String(table_gpsLat, 6) + ",";
+  out += "\"gpsLon\":" + String(table_gpsLon, 6) + ",";
+  out += "\"motorTemp\":" + String(table_motorTemp, 2) + ",";
+  out += "\"use\":" + String(useTableValues ? 1 : 0);
+  out += "}";
+  res.print(out);
+}
+
+// Set values in the editable table (protected by token)
+void tableSetHandler(Request &req, Response &res) {
+  String path = req.path();
+  int qpos = path.indexOf('?');
+  String providedToken = "";
+  if (qpos >= 0) {
+    String query = path.substring(qpos+1);
+    int start = 0;
+    while (start < query.length()) {
+      int amp = query.indexOf('&', start);
+      if (amp == -1) amp = query.length();
+      String pair = query.substring(start, amp);
+      int eq = pair.indexOf('=');
+      if (eq>0) {
+        String key = pair.substring(0, eq);
+        String val = pair.substring(eq+1);
+  if (key == "token") providedToken = val;
+        else if (key == "vref") table_vref = val.toDouble();
+        else if (key == "targetAngle") table_targetAngle = val.toFloat();
+        else if (key == "omega") table_omega = val.toDouble();
+        else if (key == "temps") table_temps = val.toDouble();
+        else if (key == "commande") table_commande = val.toDouble();
+        else if (key == "gpsLat") table_gpsLat = val.toDouble();
+        else if (key == "gpsLon") table_gpsLon = val.toDouble();
+        else if (key == "motorTemp") table_motorTemp = val.toFloat();
+  else if (key == "use") useTableValues = (val == "1" || val == "true");
+      }
+      start = amp+1;
+    }
+  }
+  if (remoteAuthToken.length() == 0 || providedToken != remoteAuthToken) {
+    res.print("HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\r\n{\"error\":\"unauthorized\"}");
+    return;
+  }
+  // respond with updated table
+  tableHandler(req, res);
+}
+
 
 // Fonction d'initialisation exécutée une fois au démarrage
 void setup() {
@@ -239,6 +294,9 @@ void setup() {
   app.get("/login.html", &loginHandler);
   app.get("/dashboard.html", &dashboardHandler);
   app.get("/style.css", &styleHandler);
+  app.get("/editor.html", [](Request &req, Response &res){ res.print("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"); res.print(editor_page); });
+  app.get("/table", &tableHandler);
+  app.get("/table/set", &tableSetHandler);
 
   // Route de secours pour les chemins non trouvés (404)
   // Attention : la signature et l'API exacte de aWOT peuvent varier selon

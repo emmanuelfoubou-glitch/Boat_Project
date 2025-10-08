@@ -26,6 +26,18 @@ extern volatile bool remoteSetpointsEnabled;
 // Simple auth token (store generated token here)
 extern String remoteAuthToken;
 
+// Simple editable table stored on the device (backend values editable via /table/set)
+extern volatile double table_vref;
+extern volatile float table_targetAngle;
+extern volatile double table_omega;
+extern volatile double table_temps;
+extern volatile double table_commande;
+extern volatile double table_gpsLat;
+extern volatile double table_gpsLon;
+extern volatile float table_motorTemp;
+// When true, /data will return the editable table values instead of live sensors
+extern volatile bool useTableValues;
+
 // Returns a JSON string with the current telemetry
 String getDataJSON();
 
